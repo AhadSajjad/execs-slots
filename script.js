@@ -1,3 +1,20 @@
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+    apiKey: "AIzaSyCzJ6malLm2EebqRm021jxqhGMxv4TegjU",
+    authDomain: "execs-bookings.firebaseapp.com",
+    projectId: "execs-bookings",
+    storageBucket: "execs-bookings.firebasestorage.app",
+    messagingSenderId: "1033240684866",
+    appId: "1:1033240684866:web:e71e5b30004cf9edc240db",
+    measurementId: "G-MR00QK8B0J"
+  };
+
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Slot and team data
 const teams = [
     "Admin Coordination", "Event Management", "Inventory & Merchandise", "Marketing & Sponsorships",
     "Finance", "Security", "Protocols", "Socials", "Web & IT", "Decor", "Logistics", "Human Resources",
@@ -9,6 +26,7 @@ const availableSlots = [
     "Wednesday: 1-2pm", "Wednesday: 3-4pm", "Wednesday: 4-5pm"
 ];
 
+// Load booked slots from Firestore
 let bookedSlots = [];
 
 function populateTeams() {
@@ -20,7 +38,7 @@ function populateTeams() {
             <td>
                 <select class="slot-select" onchange="handleSlotSelect(event, '${team}')">
                     <option value="">Select a slot</option>
-                    ${availableSlots.map(slot => `<option value="${slot}">${slot}</option>`).join('')}
+                    ${availableSlots.map(slot => `<option value="${slot}" ${bookedSlots.includes(slot) ? 'disabled' : ''}>${slot}</option>`).join('')}
                 </select>
             </td>
         `;
@@ -28,6 +46,7 @@ function populateTeams() {
     });
 }
 
+// Handle slot selection
 function handleSlotSelect(event, team) {
     const selectedSlot = event.target.value;
     if (!selectedSlot) return;
@@ -38,25 +57,31 @@ function handleSlotSelect(event, team) {
         return;
     }
 
-    // Add the selected slot to the booked slots
-    bookedSlots.push(selectedSlot);
+    // Add selected slot to Firestore and update local state
+    db.collection("bookedSlots").add({
+        team: team,
+        slot: selectedSlot
+    }).then(() => {
+        // Update local bookedSlots state
+        bookedSlots.push(selectedSlot);
+        updateAvailableSlots();
+        // Add the team to the booked teams table
+        const bookedTeamsTable = document.getElementById('booked-teams');
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${team}</td>
+            <td>${selectedSlot}</td>
+        `;
+        bookedTeamsTable.appendChild(row);
 
-    // Add the team to the booked teams table
-    const bookedTeamsTable = document.getElementById('booked-teams');
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td>${team}</td>
-        <td>${selectedSlot}</td>
-    `;
-    bookedTeamsTable.appendChild(row);
-
-    // Disable the selected option from the dropdown
-    updateAvailableSlots();
-
-    // Clear the dropdown for this team
-    event.target.disabled = true;
+        // Disable the selected slot
+        event.target.disabled = true;
+    }).catch(error => {
+        console.error("Error adding document: ", error);
+    });
 }
 
+// Update available slots based on booked slots
 function updateAvailableSlots() {
     const selectElements = document.querySelectorAll('.slot-select');
     selectElements.forEach(select => {
@@ -71,8 +96,25 @@ function updateAvailableSlots() {
     });
 }
 
-// Initialize the page
+// Load booked slots from Firestore on page load
 window.onload = () => {
-    populateTeams();
-    updateAvailableSlots();
+    db.collection("bookedSlots").get().then(querySnapshot => {
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            bookedSlots.push(data.slot);  // Add to local booked slots array
+            // Add to booked teams table
+            const bookedTeamsTable = document.getElementById('booked-teams');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${data.team}</td>
+                <td>${data.slot}</td>
+            `;
+            bookedTeamsTable.appendChild(row);
+        });
+
+        updateAvailableSlots();  // Update the dropdowns based on booked slots
+        populateTeams();         // Populate teams dropdown with available slots
+    }).catch(error => {
+        console.log("Error getting documents: ", error);
+    });
 };
