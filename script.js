@@ -1,5 +1,6 @@
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, getDocs, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
 const firebaseConfig = {
     apiKey: "AIzaSyCzJ6malLm2EebqRm021jxqhGMxv4TegjU",
     authDomain: "execs-bookings.firebaseapp.com",
@@ -11,110 +12,111 @@ const firebaseConfig = {
   };
 
 // Initialize Firebase
-const app = firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-// Slot and team data
+export { db };
+
+import { db } from "./firebase.js";
+import { collection, getDocs, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// Teams List
 const teams = [
     "Admin Coordination", "Event Management", "Inventory & Merchandise", "Marketing & Sponsorships",
-    "Finance", "Security", "Protocols", "Socials", "Web & IT", "Decor", "Logistics", "Human Resources",
-    "Training & Development", "Guest Relations"
+    "Finance", "Security", "Protocols", "Socials", "Web & IT", "Decor",
+    "Logistics", "Human Resources", "Training & Development", "Guest Relations"
 ];
 
-const availableSlots = [
-    "Tuesday: 1-2pm", "Tuesday: 2-3pm", "Tuesday: 4-5pm",
-    "Wednesday: 1-2pm", "Wednesday: 3-4pm", "Wednesday: 4-5pm"
-];
+// Available Slots
+const slots = ["Tuesday: 1-2pm", "Tuesday: 2-3pm", "Tuesday: 4-5pm", 
+               "Wednesday: 1-2pm", "Wednesday: 3-4pm", "Wednesday: 4-5pm"];
 
-// Load booked slots from Firestore
-let bookedSlots = [];
+const teamList = document.getElementById("team-list");
+const bookedSlotsTable = document.getElementById("booked-slots");
 
-function populateTeams() {
-    const teamList = document.getElementById('team-list');
+// Function to Load Teams
+async function loadTeams() {
+    teamList.innerHTML = "";
+
     teams.forEach(team => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${team}</td>
-            <td>
-                <select class="slot-select" onchange="handleSlotSelect(event, '${team}')">
-                    <option value="">Select a slot</option>
-                    ${availableSlots.map(slot => `<option value="${slot}" ${bookedSlots.includes(slot) ? 'disabled' : ''}>${slot}</option>`).join('')}
-                </select>
-            </td>
-        `;
+        const row = document.createElement("tr");
+
+        const teamCell = document.createElement("td");
+        teamCell.textContent = team;
+
+        const slotCell = document.createElement("td");
+        const select = document.createElement("select");
+
+        const defaultOption = document.createElement("option");
+        defaultOption.text = "Select Slot";
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        select.appendChild(defaultOption);
+
+        slots.forEach(slot => {
+            const option = document.createElement("option");
+            option.text = slot;
+            select.appendChild(option);
+        });
+
+        select.addEventListener("change", () => bookSlot(team, select.value));
+        slotCell.appendChild(select);
+        row.appendChild(teamCell);
+        row.appendChild(slotCell);
         teamList.appendChild(row);
+    });
+
+    loadBookedSlots();
+}
+
+// Function to Load Booked Slots from Firebase
+async function loadBookedSlots() {
+    bookedSlotsTable.innerHTML = "";
+    const snapshot = await getDocs(collection(db, "bookedSlots"));
+
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        addBookedSlotRow(data.team, data.slot);
     });
 }
 
-// Handle slot selection
-function handleSlotSelect(event, team) {
-    const selectedSlot = event.target.value;
-    if (!selectedSlot) return;
+// Function to Add Booked Slot to Table
+function addBookedSlotRow(team, slot) {
+    const row = document.createElement("tr");
 
-    if (bookedSlots.includes(selectedSlot)) {
-        alert("This slot is already taken. Please choose another slot.");
-        event.target.value = "";
+    const teamCell = document.createElement("td");
+    teamCell.textContent = team;
+
+    const slotCell = document.createElement("td");
+    slotCell.textContent = slot;
+
+    row.appendChild(teamCell);
+    row.appendChild(slotCell);
+    bookedSlotsTable.appendChild(row);
+}
+
+// Function to Book a Slot
+async function bookSlot(team, slot) {
+    // Check if Slot is Already Taken
+    const snapshot = await getDocs(collection(db, "bookedSlots"));
+    let slotTaken = false;
+
+    snapshot.forEach(doc => {
+        if (doc.data().slot === slot) slotTaken = true;
+    });
+
+    if (slotTaken) {
+        alert("Slot already booked! Choose another.");
+        loadTeams(); // Refresh the dropdowns
         return;
     }
 
-    // Add selected slot to Firestore and update local state
-    db.collection("bookedSlots").add({
-        team: team,
-        slot: selectedSlot
-    }).then(() => {
-        // Update local bookedSlots state
-        bookedSlots.push(selectedSlot);
-        updateAvailableSlots();
-        // Add the team to the booked teams table
-        const bookedTeamsTable = document.getElementById('booked-teams');
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${team}</td>
-            <td>${selectedSlot}</td>
-        `;
-        bookedTeamsTable.appendChild(row);
+    // Save to Firebase
+    await setDoc(doc(db, "bookedSlots", team), { team, slot });
 
-        // Disable the selected slot
-        event.target.disabled = true;
-    }).catch(error => {
-        console.error("Error adding document: ", error);
-    });
+    loadTeams();
 }
 
-// Update available slots based on booked slots
-function updateAvailableSlots() {
-    const selectElements = document.querySelectorAll('.slot-select');
-    selectElements.forEach(select => {
-        const options = select.querySelectorAll('option');
-        options.forEach(option => {
-            if (bookedSlots.includes(option.value)) {
-                option.disabled = true;
-            } else {
-                option.disabled = false;
-            }
-        });
-    });
-}
-
-// Load booked slots from Firestore on page load
-window.onload = () => {
-    db.collection("bookedSlots").get().then(querySnapshot => {
-        querySnapshot.forEach(doc => {
-            const data = doc.data();
-            bookedSlots.push(data.slot);  // Add to local booked slots array
-            // Add to booked teams table
-            const bookedTeamsTable = document.getElementById('booked-teams');
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${data.team}</td>
-                <td>${data.slot}</td>
-            `;
-            bookedTeamsTable.appendChild(row);
-        });
-
-        updateAvailableSlots();  // Update the dropdowns based on booked slots
-        populateTeams();         // Populate teams dropdown with available slots
-    }).catch(error => {
-        console.log("Error getting documents: ", error);
-    });
-};
+// Load Everything on Page Load
+window.onload = loadTeams;
