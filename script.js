@@ -10,6 +10,7 @@ const firebaseConfig = {
     appId: "1:1033240684866:web:e71e5b30004cf9edc240db",
     measurementId: "G-MR00QK8B0J"
   };
+  
 
 // Initialize Firebase
 // Initialize Firebase
@@ -117,6 +118,27 @@ async function bookSlot(team, slot) {
 
     loadTeams();
 }
+// Firestore Reference
+const bookedSlotsRef = db.collection("bookedSlots");
+
+// Function to Fetch Booked Slots and Display Them
+function fetchBookedSlots() {
+    bookedSlotsRef.get().then((querySnapshot) => {
+        const bookedSlotsTable = document.getElementById("bookedSlotsTable");
+        bookedSlotsTable.innerHTML = ""; // Clear previous entries
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const row = `<tr><td>${data.team}</td><td>${data.slot}</td></tr>`;
+            bookedSlotsTable.innerHTML += row;
+        });
+    }).catch((error) => {
+        console.error("Error fetching booked slots: ", error);
+    });
+}
+
+// Run function when page loads
+fetchBookedSlots();
 
 // Load Everything on Page Load
 window.onload = loadTeams;
